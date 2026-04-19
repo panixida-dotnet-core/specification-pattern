@@ -1,195 +1,277 @@
-## What to do after creating a repository from this template
+# PANiXiDA.Core.SpecificationPattern
 
-### 1. Rename repository metadata
-- change repository name
-- change solution / project names
-- change package ID
-- change assembly name
-- change repository URLs
-- change ProjectReference in test project
+`PANiXiDA.Core.SpecificationPattern` is a .NET library for implementing the Specification pattern with reusable business rules, composable predicates, and filtering support for in-memory collections and query providers.
 
-### 2. Update package metadata
-- description
-- tags
-
-### 3. Update documentation
-- replace this template README with the project README
-- fill all placeholder sections
-- update badges
-- update installation instructions
-- add real usage examples
-
-### 4. Configure GitHub repository
-- check repository visibility
-- configure default branch
-- configure branch protection rules
-- configure Issues / Discussions if needed
-- configure repository description, topics and website
-
-### 5. Prepare the first release
-- update versioning configuration pathFilters in version.json
-- verify NuGet metadata
-- verify README and icon inside the package
-- publish the first package version
-- the version is updated automatically based on the commit history
-
----
-
-# Universal README template for the NuGet package
-
-# <PackageName>
-
-`<PackageName>` is a .NET library for <short purpose>.
-
-It is designed for <target audience> who need <main value / main scenario>.
+It is designed for domain and application code that needs explicit, testable rules which can be evaluated against objects or converted to expression trees for querying.
 
 ## Status
 
-[![CI](https://github.com/<OWNER>/<REPOSITORY>/actions/workflows/ci.yml/badge.svg)](https://github.com/<OWNER>/<REPOSITORY>/actions/workflows/ci.yml)
-[![NuGet](https://img.shields.io/nuget/v/<PACKAGE_ID>.svg)](https://www.nuget.org/packages/<PACKAGE_ID>)
-[![NuGet downloads](https://img.shields.io/nuget/dt/<PACKAGE_ID>.svg)](https://www.nuget.org/packages/<PACKAGE_ID>)
+[![CI](https://github.com/panixida-dotnet-core/specification-pattern/actions/workflows/ci.yml/badge.svg)](https://github.com/panixida-dotnet-core/specification-pattern/actions/workflows/ci.yml)
+[![NuGet](https://img.shields.io/nuget/v/PANiXiDA.Core.SpecificationPattern.svg)](https://www.nuget.org/packages/PANiXiDA.Core.SpecificationPattern)
+[![NuGet downloads](https://img.shields.io/nuget/dt/PANiXiDA.Core.SpecificationPattern.svg)](https://www.nuget.org/packages/PANiXiDA.Core.SpecificationPattern)
 [![Target Framework](https://img.shields.io/badge/target-net10.0-512BD4)](https://dotnet.microsoft.com/)
-[![License](https://img.shields.io/github/license/<OWNER>/<REPOSITORY>.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 ## Overview
 
-Describe:
+The package provides a small public API for creating and combining specifications:
 
-- what problem this package solves;
-- why it exists;
-- where it fits in the system or ecosystem;
-- how it differs from alternatives, if that matters.
+- define business rules as `ISpecification<T>` or `Specification<T>`;
+- create expression-backed specifications with `SpecificationFactory.Create`;
+- create always-true and always-false specifications with `SpecificationFactory.All` and `SpecificationFactory.None`;
+- compose specifications with `And`, `Or`, and `Not`;
+- filter `IQueryable<T>` sources by expression;
+- filter `IEnumerable<T>` sources by compiled predicate.
 
-Keep this section short and practical.
+Composition implementations are internal. Consumers work through the public abstraction, base class, factory, and extension methods instead of depending on concrete composition classes.
 
-## Features
-
-- Feature 1
-- Feature 2
-- Feature 3
-- Feature 4
-- Feature 5
-
-## Quick Start
-
-### Requirements
+## Requirements
 
 - .NET 10 SDK
+- A project targeting `net10.0` or a compatible target framework
 
-### Installation
+## Installation
+
+Package Manager:
+
+```powershell
+dotnet add package PANiXiDA.Core.SpecificationPattern
+```
+
+PackageReference:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="<PACKAGE_ID>" Version="..." />
+  <PackageReference Include="PANiXiDA.Core.SpecificationPattern" Version="1.0.1" />
 </ItemGroup>
-````
-
-### Minimal import
-
-```csharp
-using <RootNamespace>;
 ```
 
-### First example
+For projects using central package management, define the version in `Directory.Packages.props`.
+
+```xml
+<ItemGroup>
+  <PackageVersion Include="PANiXiDA.Core.SpecificationPattern" Version="1.0.1" />
+</ItemGroup>
+```
+
+## Quick Start
+
+Create a specification from an expression and use it to evaluate a candidate object:
 
 ```csharp
-// Add a minimal example here
+using PANiXiDA.Core.SpecificationPattern.Core;
+using PANiXiDA.Core.SpecificationPattern.Factories;
+
+public sealed class User
+{
+    public bool IsActive { get; init; }
+
+    public bool IsBlocked { get; init; }
+
+    public int Age { get; init; }
+}
+
+Specification<User> activeAdult = SpecificationFactory.Create<User>(
+    user => user.IsActive && user.Age >= 18);
+
+bool isSatisfied = activeAdult.IsSatisfiedBy(new User
+{
+    IsActive = true,
+    Age = 21
+});
 ```
 
 ## Usage
 
-### Basic usage
+### Custom specifications
+
+Use `Specification<T>` when a rule deserves a named type:
 
 ```csharp
-// Add a basic example here
+using System.Linq.Expressions;
+using PANiXiDA.Core.SpecificationPattern.Core;
+
+public sealed class ActiveUserSpecification : Specification<User>
+{
+    public override Expression<Func<User, bool>> ToExpression()
+    {
+        return user => user.IsActive;
+    }
+}
 ```
 
-### Typical scenario
+Named specifications are useful when the same rule is reused across domain logic, application services, and query scenarios.
+
+### Composition
+
+Specifications derived from `Specification<T>` can be combined with `And`, `Or`, and `Not`.
 
 ```csharp
-// Add a realistic example here
+using PANiXiDA.Core.SpecificationPattern.Core;
+using PANiXiDA.Core.SpecificationPattern.Factories;
+
+Specification<User> active = new ActiveUserSpecification();
+Specification<User> adult = SpecificationFactory.Create<User>(user => user.Age >= 18);
+Specification<User> blocked = SpecificationFactory.Create<User>(user => user.IsBlocked);
+
+Specification<User> activeAdult = active.And(adult);
+Specification<User> activeOrAdult = active.Or(adult);
+Specification<User> allowedActiveAdult = active.And(adult).And(blocked.Not());
 ```
 
-### Advanced scenario
+`And` and `Or` accept `ISpecification<T>` arguments, so custom implementations can participate in composition. The composition methods themselves are available on `Specification<T>`.
+
+### Queryable filtering
+
+Use the `IQueryable<T>` extension when the source should receive the expression tree.
 
 ```csharp
-// Add an advanced example here if needed
+using PANiXiDA.Core.SpecificationPattern.Core;
+using PANiXiDA.Core.SpecificationPattern.Extensions;
+using PANiXiDA.Core.SpecificationPattern.Factories;
+using System.Linq;
+
+IQueryable<User> users = new[]
+{
+    new User { IsActive = true, Age = 21 },
+    new User { IsActive = true, Age = 16 },
+    new User { IsActive = false, Age = 30 }
+}.AsQueryable();
+
+Specification<User> activeAdult = SpecificationFactory
+    .Create<User>(user => user.IsActive)
+    .And(SpecificationFactory.Create<User>(user => user.Age >= 18));
+
+IQueryable<User> query = users.Where(activeAdult);
 ```
+
+This is intended for query providers such as Entity Framework Core, provided the expression can be translated by the provider.
+
+### Enumerable filtering
+
+Use the `IEnumerable<T>` extension for in-memory collections.
+
+```csharp
+using PANiXiDA.Core.SpecificationPattern.Core;
+using PANiXiDA.Core.SpecificationPattern.Extensions;
+using PANiXiDA.Core.SpecificationPattern.Factories;
+using System.Collections.Generic;
+
+IEnumerable<User> users = new[]
+{
+    new User { IsActive = true, Age = 21 },
+    new User { IsActive = false, Age = 30 }
+};
+
+Specification<User> active = SpecificationFactory.Create<User>(user => user.IsActive);
+
+IEnumerable<User> result = users.Where(active);
+```
+
+For `IEnumerable<T>`, the specification expression is compiled and evaluated as a predicate.
+
+## Public API
+
+### `ISpecification<T>`
+
+Core abstraction for specification implementations.
+
+```csharp
+bool IsSatisfiedBy(T candidate);
+Expression<Func<T, bool>> ToExpression();
+```
+
+### `Specification<T>`
+
+Base class for reusable specifications.
+
+- caches the compiled predicate used by `IsSatisfiedBy`;
+- requires derived classes to implement `ToExpression`;
+- exposes `And`, `Or`, and `Not` composition methods.
+
+### `SpecificationFactory`
+
+Factory for common specification creation scenarios.
+
+```csharp
+Specification<T> All<T>();
+Specification<T> None<T>();
+Specification<T> Create<T>(Expression<Func<T, bool>> expression);
+```
+
+### `SpecificationQueryableExtensions`
+
+Filtering extensions for queryable and enumerable sources.
+
+```csharp
+IQueryable<T> Where<T>(this IQueryable<T> query, ISpecification<T> specification);
+IEnumerable<T> Where<T>(this IEnumerable<T> source, ISpecification<T> specification);
+```
+
+## Behavior Notes
+
+- `SpecificationFactory.Create` throws `ArgumentNullException` when `expression` is `null`.
+- `Specification<T>.And` and `Specification<T>.Or` throw `ArgumentNullException` when `specification` is `null`.
+- Filtering extensions throw `ArgumentNullException` when the source or specification is `null`.
+- `Not` negates the current specification.
+- `All<T>` is satisfied by every candidate.
+- `None<T>` is not satisfied by any candidate.
+- Query provider compatibility depends on the expression used by the specification.
 
 ## Configuration
 
-Describe configuration only if the package actually requires it.
-
-Possible topics:
-
-* environment variables;
-* `appsettings.json`;
-* feature flags;
-* external services;
-* secrets;
-* runtime prerequisites.
-
-If the package does not require runtime configuration, say so explicitly.
+The package does not require runtime configuration, environment variables, external services, or application settings.
 
 ## Project Structure
 
 ```text
 .
-├── src/
-│   └── <ProjectName>/
-├── tests/
-│   └── <ProjectName>.UnitTests/
-├── .editorconfig
-├── .gitattributes
-├── .gitignore
-├── Directory.Build.props
-├── Directory.Build.targets
-├── Directory.Packages.props
-├── global.json
-├── version.json
-├── LICENSE
-└── README.md
+|-- src/
+|   `-- PANiXiDA.Core.SpecificationPattern/
+|-- tests/
+|   `-- PANiXiDA.Core.SpecificationPattern.UnitTests/
+|-- Directory.Build.props
+|-- Directory.Build.targets
+|-- Directory.Packages.props
+|-- global.json
+|-- version.json
+|-- LICENSE
+`-- README.md
 ```
-
-### Main repository files
-
-* `src/` — source code
-* `tests/` — automated tests
-* `Directory.Build.props` — shared MSBuild settings
-* `Directory.Build.targets` — shared build / packaging settings
-* `Directory.Packages.props` — centralized package versions
-* `global.json` — SDK and tooling configuration
-* `version.json` — versioning configuration
-* `README.md` — package overview and usage documentation
 
 ## Development
 
-### Build
+Restore dependencies:
 
 ```bash
 dotnet restore
-dotnet build --configuration Release
 ```
 
-### Format
+Format code:
 
 ```bash
 dotnet format
 ```
 
-### Test
+Build:
+
+```bash
+dotnet build --configuration Release
+```
+
+Run tests:
 
 ```bash
 dotnet test --configuration Release
 ```
 
-### Pack
+Pack:
 
 ```bash
 dotnet pack --configuration Release
 ```
 
-### Full local validation
+Full local validation:
 
 ```bash
 dotnet restore
@@ -199,88 +281,31 @@ dotnet test --configuration Release
 dotnet pack --configuration Release
 ```
 
-### Tooling and conventions
+## Tooling
 
 This repository uses:
 
-* .NET 10
-* Nullable enabled
-* Implicit usings enabled
-* Central package management
-* GitHub Actions
-* Nerdbank.GitVersioning
-
-Add more items only if they are actually relevant for the repository.
-
-## API / Contracts / Examples
-
-Describe the public API surface here.
-
-Suggested structure:
-
-* core abstractions;
-* main entry points;
-* key extension methods;
-* important behavioral notes;
-* typical integration examples.
-
-## Roadmap / TODO
-
-Potential future improvements:
-
-* item 1;
-* item 2;
-* item 3.
-
-Remove this section if it does not provide value.
+- .NET 10
+- Nullable reference types
+- Implicit usings
+- Central package management
+- Microsoft Testing Platform
+- xUnit v3
+- FluentAssertions
+- Nerdbank.GitVersioning
 
 ## Contributing
 
-Contributions are welcome.
+When changing the package:
 
-### General rules
-
-* keep the public API intentional;
-* avoid unnecessary dependencies;
-* preserve repository conventions;
-* do not introduce breaking changes without review;
-* keep documentation updated.
-
-### Code style
-
-* follow the repository `.editorconfig`;
-* prefer readable and explicit code;
-* keep naming consistent with the existing codebase.
-
-### Tests
-
-* add or update tests for meaningful behavior changes;
-* cover both success and failure scenarios where applicable;
-* add regression tests for bug fixes.
-
-### Validation before completion
-
-Run:
-
-```bash
-dotnet restore
-dotnet format
-dotnet build --configuration Release
-dotnet test --configuration Release
-```
+- keep the public API small and intentional;
+- avoid unnecessary dependencies;
+- preserve existing naming and architecture;
+- update tests for meaningful behavior changes;
+- update this README when public behavior, public API, package metadata, or development workflow changes.
 
 ## License
 
-This project is licensed under the <LicenseName> license.
+This project is licensed under the Apache-2.0 license.
 
-See the [LICENSE](LICENSE) file for details.
-
-## Maintainers / Contacts
-
-Maintained by <Author / Team / Organization>.
-
-For questions or improvements, use:
-
-* GitHub Issues
-* Pull Requests
-* GitHub Discussions, if enabled
+See [LICENSE](LICENSE) for details.
