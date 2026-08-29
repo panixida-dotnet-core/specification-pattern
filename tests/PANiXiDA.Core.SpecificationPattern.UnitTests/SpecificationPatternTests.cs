@@ -134,7 +134,7 @@ public sealed class SpecificationPatternTests
         Specification<TestItem> specification = SpecificationFactory.Create<TestItem>(
             item => item.Category == "target");
 
-        TestItem[] result = query.Where(specification).ToArray();
+        TestItem[] result = [.. query.Where(specification)];
 
         result.Should().HaveCount(2);
         result.Select(item => item.Value).Should().Equal(1, 3);
@@ -164,16 +164,16 @@ public sealed class SpecificationPatternTests
     [Fact(DisplayName = "Enumerable Where filters by specification predicate")]
     public void EnumerableWhere_FiltersBySpecificationPredicate()
     {
-        IEnumerable<TestItem> source = new[]
-        {
+        IEnumerable<TestItem> source =
+        [
             CreateItem(1, category: "target"),
             CreateItem(2, category: "other"),
             CreateItem(3, category: "target")
-        };
+        ];
         Specification<TestItem> specification = SpecificationFactory.Create<TestItem>(
             item => item.Category == "target");
 
-        TestItem[] result = source.Where(specification).ToArray();
+        TestItem[] result = [.. source.Where(specification)];
 
         result.Should().HaveCount(2);
         result.Select(item => item.Value).Should().Equal(1, 3);
@@ -182,7 +182,7 @@ public sealed class SpecificationPatternTests
     [Fact(DisplayName = "Enumerable Where throws when arguments are null")]
     public void EnumerableWhere_WhenArgumentsAreNull_ThrowsArgumentNullException()
     {
-        IEnumerable<TestItem> source = Array.Empty<TestItem>();
+        IEnumerable<TestItem> source = [];
         Specification<TestItem> specification = SpecificationFactory.All<TestItem>();
 
         Action nullSourceAct = () => SpecificationQueryableExtensions.Where(
@@ -208,22 +208,15 @@ public sealed class SpecificationPatternTests
         return new TestItem(value, category, tags);
     }
 
-    private sealed class TestItem
+    private sealed class TestItem(
+        int value,
+        string category,
+        IReadOnlyCollection<string> tags)
     {
-        public TestItem(
-            int value,
-            string category,
-            IReadOnlyCollection<string> tags)
-        {
-            Value = value;
-            Category = category;
-            Tags = tags;
-        }
+        public int Value { get; } = value;
 
-        public int Value { get; }
+        public string Category { get; } = category;
 
-        public string Category { get; }
-
-        public IReadOnlyCollection<string> Tags { get; }
+        public IReadOnlyCollection<string> Tags { get; } = tags;
     }
 }
